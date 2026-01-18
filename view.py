@@ -21,14 +21,22 @@ SIDEBAR_PADX = 40 # Powiększony odstęp od lewej dla logo i tekstu
 
 class NavButton(ctk.CTkButton):
     def __init__(self, master, text, icon_text, command, **kwargs):
-        # Używamy ujednoliconego paddingu wewnątrz tekstu dla anchor="w"
-        # CTkButton nie wspiera padx w configure, więc ustawiamy to w init lub przez spacje
-        display_text = f"  {icon_text}   {text}" # Dodatkowe spacje dla "oddechu" od lewej
-        super().__init__(master, text=display_text, command=command, 
-                         corner_radius=0, height=52,
-                         fg_color="transparent", text_color=("gray10", "gray90"),
-                         hover_color=("gray75", "gray25"), anchor="w",
-                         font=FONT_UI, **kwargs)
+        display_text = f"  {icon_text}   {text}"
+        
+        # Domyślne parametry stylu
+        params = {
+            "corner_radius": 0,
+            "height": 52,
+            "fg_color": "transparent",
+            "text_color": ("gray10", "gray90"),
+            "hover_color": ("gray75", "gray25"),
+            "anchor": "w",
+            "font": FONT_UI
+        }
+        # Nadpisanie domyślnych parametrów przez te przekazane w kwargs
+        params.update(kwargs)
+        
+        super().__init__(master, text=display_text, command=command, **params)
 
 class Sidebar(ctk.CTkFrame):
     def __init__(self, master, callbacks, **kwargs):
@@ -47,19 +55,43 @@ class Sidebar(ctk.CTkFrame):
         self.sep = ctk.CTkFrame(self, height=1, fg_color=("gray85", "gray20"))
         self.sep.pack(fill="x")
 
-        # Nawigacja
+        # Nawigacja (Ekranowe)
+        self.nav_buttons = {}
+        
         self.btn_dash = NavButton(self, text="Dashboard", icon_text="🏠", command=lambda: callbacks['menu']("session"))
         self.btn_dash.pack(fill="x", pady=(40, 0))
+        self.nav_buttons["session"] = self.btn_dash
 
         self.btn_sales = NavButton(self, text="Wysyłka Faktur", icon_text="📤", command=lambda: callbacks['menu']("sales"))
         self.btn_sales.pack(fill="x", pady=0)
+        self.nav_buttons["sales"] = self.btn_sales
 
         self.btn_purchases = NavButton(self, text="Odbiór Faktur", icon_text="📥", command=lambda: callbacks['menu']("purchases"))
         self.btn_purchases.pack(fill="x", pady=0)
+        self.nav_buttons["purchases"] = self.btn_purchases
 
-        # 3. Theme Section at Bottom
-        self.theme_btn = NavButton(self, text="Przełącz Motyw", icon_text="🌓", command=self.toggle_theme)
-        self.theme_btn.pack(side="bottom", fill="x", pady=20)
+        # 3. Bottom Section (Actions & Theme)
+        self.bottom_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.bottom_frame.pack(side="bottom", fill="x", pady=10)
+
+        # Przycisk Logowania (Teraz na dole, bez stałego koloru)
+        self.btn_login = NavButton(self.bottom_frame, text="Połącz z KSeF", icon_text="🔑", 
+                                   command=callbacks['session_actions']['login'])
+        self.btn_login.pack(fill="x")
+
+        self.theme_btn = NavButton(self.bottom_frame, text="Przełącz Motyw", icon_text="🌓", command=self.toggle_theme)
+        self.theme_btn.pack(fill="x")
+
+    def set_active_tab(self, tab_name):
+        """Podświetla przycisk aktywnego ekranu na niebiesko"""
+        ACTIVE_BG = "#0066cc"
+        ACTIVE_TEXT = "white"
+        
+        for name, btn in self.nav_buttons.items():
+            if name == tab_name:
+                btn.configure(fg_color=ACTIVE_BG, text_color=ACTIVE_TEXT, hover_color="#0052a3")
+            else:
+                btn.configure(fg_color="transparent", text_color=("gray10", "gray90"), hover_color=("gray75", "gray25"))
 
     def toggle_theme(self):
         current = ctk.get_appearance_mode()
@@ -83,10 +115,18 @@ class TopHeader(ctk.CTkFrame):
         self.right_container = ctk.CTkFrame(self, fg_color="transparent")
         self.right_container.pack(side="right", fill="y", padx=40)
         
-        self.status_frame = ctk.CTkFrame(self.right_container, corner_radius=15, height=32, fg_color="#f8d7da")
+        self.status_frame = ctk.CTkFrame(self.right_container, corner_radius=6, height=34, fg_color="#f8d7da")
         self.status_frame.pack(side="right", expand=True)
-        self.status_label = ctk.CTkLabel(self.status_frame, text="Brak Sesji", text_color="#721c24", font=FONT_BOLD)
-        self.status_label.pack(padx=18, pady=4)
+        
+        # Pojemnik na ikonę i tekst dla precyzyjnego centrowania
+        self.status_content = ctk.CTkFrame(self.status_frame, fg_color="transparent")
+        self.status_content.pack(expand=True, padx=15)
+
+        self.status_icon = ctk.CTkLabel(self.status_content, text="◉", font=("Segoe UI", 16), text_color="#721c24")
+        self.status_icon.pack(side="left", padx=(0, 8))
+
+        self.status_label = ctk.CTkLabel(self.status_content, text="Niezalogowano", text_color="#721c24", font=FONT_BOLD)
+        self.status_label.pack(side="left")
 
     def set_title(self, text):
         self.lbl_title.configure(text=text)
@@ -94,10 +134,12 @@ class TopHeader(ctk.CTkFrame):
     def update_status(self, is_logged_in):
         if is_logged_in:
             self.status_frame.configure(fg_color="#d4edda")
-            self.status_label.configure(text="Sesja Aktywna", text_color="#155724")
+            self.status_icon.configure(text_color="#155724")
+            self.status_label.configure(text="Zalogowano do KSeF", text_color="#155724")
         else:
             self.status_frame.configure(fg_color="#f8d7da")
-            self.status_label.configure(text="Brak Sesji", text_color="#721c24")
+            self.status_icon.configure(text_color="#721c24")
+            self.status_label.configure(text="Niezalogowano", text_color="#721c24")
 
 class DashboardView(ctk.CTkFrame):
     def __init__(self, master, model, callbacks, **kwargs):
@@ -110,20 +152,15 @@ class DashboardView(ctk.CTkFrame):
         self.title = ctk.CTkLabel(self.center_frame, text="KSeF Desktop Client", font=FONT_DASH_TITLE)
         self.title.pack(pady=10)
 
-        self.desc = ctk.CTkLabel(self.center_frame, text="Profesjonalne narzędzie do obsługi faktur.\nWitaj ponownie! Kliknij poniżej, aby otworzyć bezpieczną sesję z KSeF.", font=FONT_UI, text_color="gray")
+        self.desc = ctk.CTkLabel(self.center_frame, text="Profesjonalne narzędzie do obsługi faktur.\nWitaj ponownie! Użyj przycisku w panelu bocznym,\naby otworzyć bezpieczną sesję z KSeF.", font=FONT_UI, text_color="gray")
         self.desc.pack(pady=(0, 40))
-
-        self.btn_login = ctk.CTkButton(self.center_frame, text="Otwórz Sesję KSeF", font=FONT_BOLD, 
-                                        height=55, width=320, corner_radius=12, command=callbacks['login'],
-                                        fg_color="#0066cc", hover_color="#0052a3")
-        self.btn_login.pack()
 
 class SalesView(ctk.CTkFrame):
     def __init__(self, master, callbacks, mapping_templates, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         
-        BTN_COLOR = "#2c3e50"
-        BTN_HOVER = "#34495e"
+        BTN_COLOR = "#0066cc"
+        BTN_HOVER = "#0052a3"
 
         # 1. Toolbar
         self.toolbar = ctk.CTkFrame(self, height=60, fg_color="transparent")
@@ -162,8 +199,8 @@ class PurchasesView(ctk.CTkFrame):
     def __init__(self, master, callbacks, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         
-        BTN_COLOR = "#2c3e50"
-        BTN_HOVER = "#34495e"
+        BTN_COLOR = "#0066cc"
+        BTN_HOVER = "#0052a3"
 
         # 1. Toolbar
         self.toolbar = ctk.CTkFrame(self, height=60, fg_color="transparent")
@@ -177,9 +214,6 @@ class PurchasesView(ctk.CTkFrame):
 
         self.btn_export = ctk.CTkButton(self.toolbar, text="Eksportuj do Excel", command=callbacks['export'], corner_radius=8, fg_color=BTN_COLOR, hover_color=BTN_HOVER)
         self.btn_export.pack(side="left", padx=5)
-
-        self.btn_przyklad = ctk.CTkButton(self.toolbar, text="btn_przyklad", command=callbacks['export'], corner_radius=8, fg_color=BTN_COLOR, hover_color=BTN_HOVER)
-        self.btn_przyklad.pack(side="left", padx=5)
 
         # 2. Filter Bar
         self.filter_frame = ctk.CTkFrame(self, height=45, fg_color="transparent")
@@ -247,6 +281,9 @@ class KSeFViewV4(ctk.CTk):
         self.show_view("session")
 
     def show_view(self, name):
+        # Aktualizacja podświetlenia w sidebarze
+        self.sidebar.set_active_tab(name)
+
         if name == "session":
             self.header.set_title(f"Witaj, {self.model.user_name}!")
         elif name == "sales":
